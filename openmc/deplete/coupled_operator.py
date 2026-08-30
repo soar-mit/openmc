@@ -266,6 +266,98 @@ class CoupledOperator(OpenMCOperator):
             helper_kwargs=helper_kwargs,
             reduce_chain_level=reduce_chain_level)
 
+    def _save_sparse_matrix(self, matrix, filepath):
+        """Save sparse matrix using scipy.sparse.save_npz."""
+        from scipy.sparse import save_npz
+        from pathlib import Path
+
+        filepath = Path(filepath) if not isinstance(filepath, Path) else filepath
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        save_npz(filepath, matrix)
+
+    def _save_matrices_and_vectors(
+        self,
+        step,
+        decay_mat,
+        rxn_mats_by_material,
+        trans_mats_by_material,
+        n,
+        mat_ids_by_index=None,
+    ):
+        """
+        Save decay matrix, reaction matrices, transmutation matrices,
+        concentration vectors, and per-step metadata for each fuel material.
+
+        rxn_mats_by_material and trans_mats_by_material are dictionaries:
+            {
+                0: matrix for fuel_35,
+                1: matrix for fuel_50,
+            }
+        """
+        from pathlib import Path
+        import numpy as np
+        import json
+
+        output_dir = Path("matrices_by_step")
+
+        fuel_names_by_index = {
+            0: "fuel_35",
+            1: "fuel_50",
+        }
+
+        if mat_ids_by_index is None:
+            mat_ids_by_index = {}
+
+        for fuel_id, fuel_name in fuel_names_by_index.items():
+            step_dir = output_dir / fuel_name / f"step_{step:04d}"
+            step_dir.mkdir(parents=True, exist_ok=True)
+
+            rxn_mat = rxn_mats_by_material.get(fuel_id)
+            trans_mat = trans_mats_by_material.get(fuel_id)
+
+            if rxn_mat is None:
+                print(f"Warning: reaction matrix is None for {fuel_name} at step {step}")
+                continue
+
+            if trans_mat is None:
+                print(f"Warning: transmutation matrix is None for {fuel_name} at step {step}")
+                continue
+
+            self._save_sparse_matrix(decay_mat, step_dir / "decay_matrix.npz")
+            self._save_sparse_matrix(rxn_mat, step_dir / "rxn_matrix.npz")
+            self._save_sparse_matrix(trans_mat, step_dir / "transmutation_matrix.npz")
+
+            if n is not None and fuel_id < len(n):
+                conc_vec = np.asarray(n[fuel_id], dtype=float)
+            else:
+                conc_vec = np.zeros(len(self.chain.nuclides))
+
+            np.save(step_dir / "concentration_vector.npy", conc_vec)
+
+            metadata = {
+                "step": int(step),
+                "fuel_index": int(fuel_id),
+                "fuel_name": fuel_name,
+                "openmc_material_id": str(mat_ids_by_index.get(fuel_id, "unknown")),
+                "decay_matrix_shape": list(map(int, decay_mat.shape)),
+                "decay_matrix_nnz": int(decay_mat.nnz),
+                "reaction_matrix_shape": list(map(int, rxn_mat.shape)),
+                "reaction_matrix_nnz": int(rxn_mat.nnz),
+                "transmutation_matrix_shape": list(map(int, trans_mat.shape)),
+                "transmutation_matrix_nnz": int(trans_mat.nnz),
+                "number_of_nuclides": int(len(self.chain.nuclides)),
+                "nuclide_ordering": [nuc.name for nuc in self.chain.nuclides],
+                "saved_files": {
+                    "decay_matrix": "decay_matrix.npz",
+                    "reaction_matrix": "rxn_matrix.npz",
+                    "transmutation_matrix": "transmutation_matrix.npz",
+                    "concentration_vector": "concentration_vector.npy",
+                },
+            }
+
+            with open(step_dir / "metadata.json", "w") as f:
+                json.dump(metadata, f, indent=2)
+
     def _differentiate_burnable_mats(self):
         """Assign distribmats for each burnable material"""
 

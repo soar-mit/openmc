@@ -869,7 +869,26 @@ class Integrator(ABC):
 
             .. versionadded:: 0.15.3
         """
+        from pathlib import Path
+        import json
+
         with change_directory(self.operator.output_dir):
+            output_dir = Path("matrices_by_step")
+            output_dir.mkdir(exist_ok=True)
+            (output_dir / "metadata").mkdir(exist_ok=True)
+            (output_dir / "fuel_35").mkdir(exist_ok=True)
+            (output_dir / "fuel_50").mkdir(exist_ok=True)
+
+            metadata = {
+                'n_nuclides': len(self.operator.chain),
+                'nuclide_names': [nuc.name for nuc in self.operator.chain.nuclides],
+                'reaction_types': self.operator.chain.reactions,
+                'materials': {'1': 'Fuel 3.5%', '2': 'Fuel 5.0%'},
+            }
+
+            with open(output_dir / "metadata" / "metadata.json", 'w') as f:
+                json.dump(metadata, f, indent=2)
+
             n = self.operator.initial_condition()
             t, self._i_res = self._get_start_data()
 
@@ -899,6 +918,76 @@ class Integrator(ABC):
                 )
 
                 # Update for next step
+                if hasattr(self.operator, '_save_matrices_and_vectors'):
+                    try:
+                        decay_matrix = self.operator.chain.decay_matrix
+
+                        rates_obj = res.rates
+                        rates_array = np.asarray(rates_obj)
+
+                        rxn_mats_by_material = {}
+                        trans_mats_by_material = {}
+
+                        mat_ids_by_index = {}
+                        if hasattr(rates_obj, "index_mat"):
+                            mat_ids_by_index = {
+                                int(index): str(mat_id)
+                                for mat_id, index in rates_obj.index_mat.items()
+                            }
+
+                        target_material_indices = [0, 1]
+
+                        if rates_array.ndim == 3:
+                            for mat_index in target_material_indices:
+                                if mat_index >= rates_array.shape[0]:
+                                    if output and comm.rank == 0:
+                                        print(
+                                            f"[openmc.deplete] Warning: material index {mat_index} "
+                                            f"not present in rates array with shape {rates_array.shape}"
+                                        )
+                                    continue
+
+                                rates_2d = rates_obj[mat_index, :, :]
+
+                                if not hasattr(rates_2d, "index_nuc") or rates_2d.index_nuc is None:
+                                    rates_2d.index_nuc = rates_obj.index_nuc
+
+                                if not hasattr(rates_2d, "index_rx") or rates_2d.index_rx is None:
+                                    rates_2d.index_rx = rates_obj.index_rx
+
+                                rxn_matrix = self.operator.chain.form_rxn_matrix(rates_2d)
+                                trans_matrix = self.operator.chain.form_matrix(rates_2d)
+
+                                rxn_mats_by_material[mat_index] = rxn_matrix
+                                trans_mats_by_material[mat_index] = trans_matrix
+
+                        elif rates_array.ndim == 2:
+                            rates_2d = rates_obj
+
+                            rxn_matrix = self.operator.chain.form_rxn_matrix(rates_2d)
+                            trans_matrix = self.operator.chain.form_matrix(rates_2d)
+
+                            rxn_mats_by_material[0] = rxn_matrix
+                            trans_mats_by_material[0] = trans_matrix
+
+                        else:
+                            raise ValueError(
+                                f"Unexpected ReactionRates dimension: {rates_array.ndim}. "
+                                f"Expected 2D or 3D."
+                            )
+
+                        self.operator._save_matrices_and_vectors(
+                            i,
+                            decay_matrix,
+                            rxn_mats_by_material,
+                            trans_mats_by_material,
+                            n,
+                            mat_ids_by_index=mat_ids_by_index,
+                        )
+
+                    except Exception as e:
+                        if output and comm.rank == 0:
+                            print(f"[openmc.deplete] Save warning: {type(e).__name__}: {e}")
                 n = n_end
                 t += dt
 
