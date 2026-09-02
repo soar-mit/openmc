@@ -888,7 +888,7 @@ class Integrator(ABC):
                 'n_nuclides': len(self.operator.chain),
                 'nuclide_names': [nuc.name for nuc in self.operator.chain.nuclides],
                 'reaction_types': self.operator.chain.reactions,
-                'materials': {'3': 'Gd_fuel_ring_01', "4" : "Gd_fuel_ring_02", 
+                'materials': {'1': 'UO2_4p23', '3': 'Gd_fuel_ring_01', "4" : "Gd_fuel_ring_02", 
                     "5" : "Gd_fuel_ring_03", "6" : "Gd_fuel_ring_04", "7" : "Gd_fuel_ring_05",
                     "8" : "Gd_fuel_ring_06", "9" : "Gd_fuel_ring_07"}
             }
@@ -942,7 +942,7 @@ class Integrator(ABC):
                                 for mat_id, index in rates_obj.index_mat.items()
                             }
 
-                        target_material_indices = [0, 1, 2, 3, 4, 5, 6]
+                        target_material_indices = [0, 1, 2, 3, 4, 5, 6, 7]
 
                         if rates_array.ndim == 3:
                             for mat_index in target_material_indices:
