@@ -876,6 +876,7 @@ class Integrator(ABC):
             output_dir = Path("matrices_by_step")
             output_dir.mkdir(exist_ok=True)
             (output_dir / "metadata").mkdir(exist_ok=True)
+            (output_dir / "uo2_4p23").mkdir(exist_ok=True)
             (output_dir / "gd_fuel_ring_01").mkdir(exist_ok=True)
             (output_dir / "gd_fuel_ring_02").mkdir(exist_ok=True)
             (output_dir / "gd_fuel_ring_03").mkdir(exist_ok=True)
