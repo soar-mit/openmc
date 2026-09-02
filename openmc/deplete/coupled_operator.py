@@ -301,8 +301,13 @@ class CoupledOperator(OpenMCOperator):
         output_dir = Path("matrices_by_step")
 
         fuel_names_by_index = {
-            0: "fuel_35",
-            1: "fuel_50",
+            0: "gd_fuel_ring_01",
+            1: "gd_fuel_ring_02",
+            2: "gd_fuel_ring_03",
+            3: "gd_fuel_ring_04",
+            4: "gd_fuel_ring_05",
+            5: "gd_fuel_ring_06",
+            6: "gd_fuel_ring_07",
         }
 
         if mat_ids_by_index is None:
